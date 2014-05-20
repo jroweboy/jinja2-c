@@ -1,0 +1,3 @@
+[submodule "jinja2"]
+	path = jinja2
+	url = http://github.com/mitsuhiko/jinja2
