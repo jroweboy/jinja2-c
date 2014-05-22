@@ -1,21 +1,22 @@
 #include <Python.h>
 #include <stdarg.h>
+#include "../include/jinja2.h"
 
 /**
  * Creates a new environment for Jinja and returns a pointer to the PyObject
  * Before the program exits you should call free_environment to all python
  * and c to clean up.
- * This function takes a string for the absolute directory to the template directory
+ * This function takes a string for the absolute path to the template directory
  */
 
  // TODO refactor this to make clean up easier
-PyObject* init_environment(const char* template_dir) {
+void* init_environment(const char* template_dir) {
     PyObject *pString, *pmodEnvironment, *pmodFileSystemLoader, *pDict;
     PyObject *pClassEnv, *pClassFLoader, *pArgs, *pFileLoader, *ret_env;
     PyObject *empty_tuple;
 
     // from jinja2 import Environment, FileSystemLoader
-Py_Initialize();
+    Py_Initialize();
     pString = PyString_FromString("jinja2.environment");
     pmodEnvironment = PyImport_Import(pString);
     Py_DECREF(pString);
@@ -102,28 +103,31 @@ Py_Initialize();
     return ret_env;
 }
 
-void free_environment(PyObject* env) {
-    if (env) {
-        Py_DECREF(env);
+void free_environment(void* env) {
+    PyObject* pEnv = (PyObject*) env;
+    if (pEnv) {
+        Py_DECREF(pEnv);
         Py_Finalize();
     }
 }
 
-PyObject* get_template(PyObject* env, const char* template_name) {
+void* get_template(void* env, const char* template_name) {
     PyObject *retval;
-    retval = PyObject_CallMethod(env, "get_template", "(s)", template_name);
+    PyObject* pEnv = (PyObject*) env;
+    retval = PyObject_CallMethod(pEnv, "get_template", "(s)", template_name);
     if (!retval) {
         fprintf(stderr, "Could not load template %s\n", template_name);
         // PyErr_Print();
         return NULL;
     }
-    return retval;
+    return (void*)retval;
 }
 
 // TODO support optional extensions and filter_func
-void list_templates(PyObject* env) {
+void list_templates(void* env) {
     PyObject *retval, *iterator, *item;
-    retval = PyObject_CallMethod(env, "list_templates", NULL);
+    PyObject* pEnv = (PyObject*) env;
+    retval = PyObject_CallMethod(pEnv, "list_templates", NULL);
     if (!retval) {
         fprintf(stderr, "Could not list templates \n");
         PyErr_Print();
@@ -151,20 +155,21 @@ void list_templates(PyObject* env) {
     }
 }
 
+
+
 /**
  * Calls the render function on this template and returns the rendered string. 
  * Do not call free on the rendered string!
  *
  * int count, the number of string arguments provided to that function
- * var_args must be of type char *
+ * args is an array of strings that contain both keys and values
  * ex: 
- * render(tmpl, 2, "name", "James");
- * render(tmpl, 4, "name", "James", "age", "24");
+ * render(tmpl, 2, ["name", "James"]);
+ * render(tmpl, 4, ["name", "James", "age", "24"]);
  */
-char* render(PyObject *tmpl, int count, ...) {
+char* render(void *tmpl, int count, char** args) {
     PyObject *retval, *pArgs, *pString;
-    va_list ap;
-    char *format_str;
+    PyObject* pTmpl = (PyObject*) tmpl;
     int i;
 
     if (count % 2) {
@@ -172,31 +177,25 @@ char* render(PyObject *tmpl, int count, ...) {
         return NULL;
     }
 
-    // make a format string which looks like {ss,ss,..ss}\0
-    // +3       for the { }\0
-    // +count/2 for the commas
-    // -1       for omitting the trailing comma
-    format_str = (char*) malloc( sizeof(char) * count + (count/2) + 2);
-    for (i=1; i<=count; ++i) {
-        format_str[i] = 's';
-        if (i%2==0 && i != count) {
-            format_str[++i] = ',';
+    if (count == 0) {
+        pArgs = PyTuple_New(0);
+        pString = PyString_FromString("render");
+        retval = PyObject_CallMethodObjArgs(pTmpl, pString, pArgs, NULL);
+        Py_DECREF(pString);
+        Py_DECREF(pArgs);
+    } else {
+        pArgs = PyDict_New();
+        for (i=0; i<count; i+=2) {
+            pString = PyString_FromString(args[i+1]);
+            PyDict_SetItemString(pArgs, args[i], pString);
+            Py_DECREF(pString);
         }
+
+        pString = PyString_FromString("render");
+        retval = PyObject_CallMethodObjArgs(pTmpl, pString, pArgs, NULL);
+        Py_DECREF(pString);
+        Py_DECREF(pArgs);
     }
-    format_str[0] = '{';
-    format_str[count+1] = '}';
-    format_str[count+2] = '\0';
-
-    va_start(ap, count);
-    pArgs = Py_VaBuildValue(format_str, ap);
-    va_end(ap);
-
-    free(format_str);
-
-    pString = PyString_FromString("render");
-    retval = PyObject_CallMethodObjArgs(tmpl, pString, pArgs, NULL);
-    Py_DECREF(pString);
-    Py_DECREF(pArgs);
     if (!retval) {
         fprintf(stderr, "Could not list templates \n");
         PyErr_Print();
@@ -205,25 +204,31 @@ char* render(PyObject *tmpl, int count, ...) {
     return PyString_AsString(retval);
 }
 
-int main(int argc, char *argv[])
-{
-    PyObject *env, *tmpl;
-    char *rendered;
+// int main(int argc, char *argv[])
+// {
+//     PyObject *env, *tmpl;
+//     char *rendered;
+//     char **vars;
+//     // hardcoded to my path for now, if you want to test this you should change this directory
+//     env = init_environment("/home/jrowe7/slf/jinja2-c/test_template/");
+//     if (!env) {
+//         fprintf(stderr, "Could not instantiate a new Environment\n");
+//         return -1;
+//     }
 
-    env = init_environment("/home/jrowe7/slf/jinja2-c/test_template/");
-    if (!env) {
-        fprintf(stderr, "Could not instantiate a new Environment\n");
-        return -1;
-    }
+//     list_templates(env);
 
-    list_templates(env);
+//     tmpl = get_template(env, "index.html");
+//     // badval = get_template(env, "dne");
+//     vars = malloc( sizeof(char*) * 2 );
+//     vars[0] = "name";
+//     vars[1] = "James";
+//     rendered = render(tmpl, 2, vars);
+//     free(vars);
 
-    tmpl = get_template(env, "index.html");
-    // badval = get_template(env, "dne");
-    rendered = render(tmpl, 2, "name", "James");
-    if (rendered) {
-        printf("%s\n", rendered);
-    }
-    free_environment(env);
-    return 0;
-}
+//     if (rendered) {
+//         printf("%s\n", rendered);
+//     }
+//     free_environment(env);
+//     return 0;
+// }
