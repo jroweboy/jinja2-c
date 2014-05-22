@@ -3,17 +3,16 @@ jinja2-c
 
 C Bindings for Jinja 2 (so any language can use it)
 
+As an example of using the c bindings, I have also baked in a rust binding for the c library
+
+There is some commented out sample code in the file src/jinja2.c 
+
 Goals
 =====
 
-I really wanted to have a Rust binding for jinja 2 (and some day a native Rust implementation) 
-so users can use Jinja 2 in my Rust webframework, but sadly I was having issues working with Python from Rust.
-I decided I would make C bindings for the Python code and then I can call the c code from Rust.
-I understand that it isn't the most elegant solution out there, but I want a templating language that 
-I can use right now, and later I can make a full implementation in Rust.
+Reimplement as many features in Jinja2 in a C binding and also a Rust binding.
 
 Current State
 =============
 
-Well... it can render a template! Hurray! I will be adding more features to the bindings as needed.
-The next step will be to make a library so other languages can call the code.
+The C library can be used to render a template and the Rust bindings for the C bindings are complete

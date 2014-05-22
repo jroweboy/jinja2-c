@@ -1,4 +1,0 @@
-The eventual goal is to make this is fully featured shared/static lib, but for now if you want to compile it you can just use
-
-Debug 
-gcc -Wall -g `python-config --cflags` jinja2.c -o test `python-config --ldflags`
